@@ -22,11 +22,11 @@ def get_company_size(company_name: str, industry: str) -> str:
         'Content-Type': 'application/json'
     }
     
-    prompt = f'''For the company '{company_name}' in the '{industry}' industry, what is their employee count? Respond with ONLY:
-    - A specific number if known (e.g., '5000')
-    - A range if approximate (e.g., '100-150')
-    - 'UNKNOWN' if you cannot determine
-    No other text or explanation - just the number, range, or UNKNOWN.'''
+    prompt = f'''Find the current or most recent employee count for {company_name}. They are in the {industry} industry. Only respond with:
+    - An exact number if you have recent factual data (e.g., '5000')
+    - A specific range if you have approximate data (e.g., '100-150')
+    - 'UNKNOWN' if you cannot find reliable data
+    Respond ONLY with the number, range, or UNKNOWN - no other text.'''
     
     print(f"\nQuerying for: {company_name} ({industry})")
     print(f"Prompt: {prompt}")
@@ -70,12 +70,30 @@ def get_company_size(company_name: str, industry: str) -> str:
     time.sleep(0.5)
 
 def main():
-    # Read the Excel file
-    excel_path = "hubspot-crm-exports-ai-nurture-test-updated.xlsx"
+    # Read the Excel file from the data directory
+    excel_path = "data/hubspot-crm-exports-ai-nurture-test-updated.xlsx"
     df = pd.read_excel(excel_path, sheet_name="Original Data")
     
-    # Add Size column
-    df["Size"] = df.apply(lambda row: get_company_size(row["Company Name"], row["Cleaned Industry"]), axis=1)
+    # Debug: Print column names
+    print("\nAvailable columns in Excel:")
+    for col in df.columns:
+        print(f"  - {col}")
+    
+    # Get the correct column names
+    company_col = "Company name"
+    industry_col = "Cleaned Industry"
+    
+    if company_col not in df.columns or industry_col not in df.columns:
+        raise ValueError(f"Could not find required columns. Need '{company_col}' and '{industry_col}' columns.")
+    
+    print(f"\nUsing columns:\n  Company: {company_col}\n  Industry: {industry_col}")
+    
+    # Add Size column if it doesn't exist
+    if "Size" not in df.columns:
+        print("Adding Size column...")
+        df["Size"] = df.apply(lambda row: get_company_size(row[company_col], row[industry_col]), axis=1)
+    else:
+        print("Size column already exists")
     
     # Save the updated Excel file with the new Size column
     df.to_excel(excel_path, sheet_name="Original Data", index=False)
