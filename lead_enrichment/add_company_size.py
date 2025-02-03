@@ -7,12 +7,27 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+# Cache to store company size results
+_company_size_cache = {}
+
 def get_company_size(company_name: str, industry: str) -> str:
     """
     Query Perplexity API to determine company size based on name and industry.
     Returns the number of employees as a range (e.g., "100-150") or single number (e.g., "5000")
     If unable to determine, returns "UNKNOWN"
+    Uses an in-memory cache to avoid duplicate API calls.
     """
+    # Create cache key from company name and industry
+    cache_key = (company_name.lower().strip(), industry.lower().strip())
+    
+    # Check cache first
+    if cache_key in _company_size_cache:
+        cached_result = _company_size_cache[cache_key]
+        print(f"Cache hit for: {company_name} ({industry}) -> {cached_result}")
+        return cached_result
+
+    print(f"Cache miss for: {company_name} ({industry})")
+    
     api_key = os.getenv('PERPLEXITY_API_KEY')
     if not api_key:
         raise ValueError("PERPLEXITY_API_KEY environment variable is required")
@@ -47,6 +62,7 @@ def get_company_size(company_name: str, industry: str) -> str:
             # Clean up the response - remove any non-numeric characters except hyphen and verify format
             size = size.replace(',', '').replace(' ', '')
             if size == 'UNKNOWN':
+                _company_size_cache[cache_key] = size
                 return size
             
             # Check if it's a valid range (e.g., 100-150) or single number
@@ -55,8 +71,10 @@ def get_company_size(company_name: str, industry: str) -> str:
                 if start.isdigit() and end.isdigit():
                     return size
             elif size.isdigit():
+                _company_size_cache[cache_key] = size
                 return size
             
+            _company_size_cache[cache_key] = 'UNKNOWN'
             return 'UNKNOWN'
         else:
             print(f"Error with API call for {company_name}: {response.status_code}")
@@ -91,12 +109,30 @@ def main():
     # Add Size column if it doesn't exist
     if "Size" not in df.columns:
         print("Adding Size column...")
-        df["Size"] = df.apply(lambda row: get_company_size(row[company_col], row[industry_col]), axis=1)
-    else:
-        print("Size column already exists")
+        df["Size"] = ""
     
-    # Save the updated Excel file with the new Size column
-    df.to_excel(excel_path, sheet_name="Original Data", index=False)
+    # Process each company and save after each one
+    total_companies = len(df)
+    processed_count = 0
+    skipped_count = 0
+    
+    for idx, row in df.iterrows():
+        # Skip if we already have data for this company
+        current_size = str(row.get("Size", "")).strip()
+        if current_size and current_size.upper() != "NAN":
+            print(f"\nSkipping company {idx + 1}/{total_companies} - already has size: {current_size}")
+            skipped_count += 1
+            continue
+            
+        print(f"\nProcessing company {idx + 1}/{total_companies}")
+        df.at[idx, "Size"] = get_company_size(row[company_col], row[industry_col])
+        processed_count += 1
+        
+        # Save after each company
+        df.to_excel(excel_path, sheet_name="Original Data", index=False)
+        print(f"Saved progress after company {idx + 1}")
+    
+    print(f"\nCompleted: {processed_count} processed, {skipped_count} skipped (already had data)")
     
     print(f"Processed {len(df)} companies")
     print("\nFirst few rows with Size:")
