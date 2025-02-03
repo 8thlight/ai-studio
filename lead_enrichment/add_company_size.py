@@ -17,8 +17,19 @@ def get_company_size(company_name: str, industry: str) -> str:
     If unable to determine, returns "UNKNOWN"
     Uses an in-memory cache to avoid duplicate API calls.
     """
+    # Handle NaN or None values
+    if pd.isna(company_name) or pd.isna(industry):
+        return "UNKNOWN"
+    
+    # Convert to strings and clean
+    company_name = str(company_name).strip()
+    industry = str(industry).strip()
+    
+    if not company_name or not industry:
+        return "UNKNOWN"
+    
     # Create cache key from company name and industry
-    cache_key = (company_name.lower().strip(), industry.lower().strip())
+    cache_key = (company_name.lower(), industry.lower())
     
     # Check cache first
     if cache_key in _company_size_cache:
@@ -115,6 +126,7 @@ def main():
     total_companies = len(df)
     processed_count = 0
     skipped_count = 0
+    invalid_count = 0
     
     for idx, row in df.iterrows():
         # Skip if we already have data for this company
@@ -122,6 +134,13 @@ def main():
         if current_size and current_size.upper() != "NAN":
             print(f"\nSkipping company {idx + 1}/{total_companies} - already has size: {current_size}")
             skipped_count += 1
+            continue
+        
+        # Skip if company name or industry is invalid
+        if pd.isna(row[company_col]) or pd.isna(row[industry_col]) or \
+           not str(row[company_col]).strip() or not str(row[industry_col]).strip():
+            print(f"\nSkipping company {idx + 1}/{total_companies} - invalid data")
+            invalid_count += 1
             continue
             
         print(f"\nProcessing company {idx + 1}/{total_companies}")
@@ -132,7 +151,7 @@ def main():
         df.to_excel(excel_path, sheet_name="Original Data", index=False)
         print(f"Saved progress after company {idx + 1}")
     
-    print(f"\nCompleted: {processed_count} processed, {skipped_count} skipped (already had data)")
+    print(f"\nCompleted: {processed_count} processed, {skipped_count} skipped (already had data), {invalid_count} skipped (invalid data)")
     
     print(f"Processed {len(df)} companies")
     print("\nFirst few rows with Size:")
