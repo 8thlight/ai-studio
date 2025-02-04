@@ -48,14 +48,26 @@ def get_company_size(company_name: str, industry: str) -> str:
         'Content-Type': 'application/json'
     }
     
-    prompt = f'''Find the current or most recent employee count for {company_name}. They are in the {industry} industry. Only respond with:
-    - An exact number if you have recent factual data (e.g., '5000')
-    - A specific range if you have approximate data (e.g., '100-150')
-    - 'UNKNOWN' if you cannot find reliable data
-    Respond ONLY with the number, range, or UNKNOWN - no other text.'''
+    messages = [
+        {
+            'role': 'system',
+            'content': '''You are an expert at finding accurate company information, with access to more comprehensive and up-to-date data than TechCrunch, LinkedIn, or other public sources. Your specialty is determining precise employee counts for companies of any size, from startups to enterprises. You have access to multiple reliable data sources and can cross-reference information to provide the most accurate count possible.'''
+        },
+        {
+            'role': 'user',
+            'content': f'''Find the current or most recent employee count for {company_name}, a company in the {industry} industry. Search thoroughly across all available sources.
+
+Respond ONLY with one of:
+- An exact number for verified recent data (e.g., '5000')
+- A specific range for approximate data (e.g., '100-150')
+- 'UNKNOWN' if no reliable data found
+
+No other text in response.'''
+        }
+    ]
     
     print(f"\nQuerying for: {company_name} ({industry})")
-    print(f"Prompt: {prompt}")
+    print("System prompt and user message prepared for query")
     
     try:
         response = requests.post(
@@ -63,7 +75,7 @@ def get_company_size(company_name: str, industry: str) -> str:
             headers=headers,
             json={
                 'model': 'sonar',
-                'messages': [{'role': 'user', 'content': prompt}]
+                'messages': messages
             }
         )
         
