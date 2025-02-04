@@ -3,9 +3,13 @@ import os
 import requests
 import time
 from dotenv import load_dotenv
+from openai import OpenAI
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Initialize OpenAI client
+openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 # Cache to store company size results
 _company_size_cache = {}
@@ -81,24 +85,123 @@ Respond ONLY with the number, range, or UNKNOWN - no other text.'''
         
         if response.status_code == 200:
             size = response.json()['choices'][0]['message']['content'].strip()
-            print(f"Response: {size}")
-            # Clean up the response - remove any non-numeric characters except hyphen and verify format
-            size = size.replace(',', '').replace(' ', '')
-            if size == 'UNKNOWN':
-                _company_size_cache[cache_key] = size
-                return size
+            print(f"Perplexity Response: {size}")
             
-            # Check if it's a valid range (e.g., 100-150) or single number
-            if '-' in size:
-                start, end = size.split('-')
-                if start.isdigit() and end.isdigit():
-                    return size
-            elif size.isdigit():
-                _company_size_cache[cache_key] = size
-                return size
+            # Use OpenAI to validate and extract the number
+            validation_messages = [
+                {
+                    'role': 'system',
+                    'content': '''You are a data validation expert. Your task is to:
+1. Verify if a given response matches the expected format for company size
+2. Extract and standardize numbers if possible
+3. Return UNKNOWN if the data is invalid or unclear'''
+                },
+                {
+                    'role': 'user',
+                    'content': f'''Validate this company size response: "{size}"
+
+Context:
+- Company: {company_name}
+- Industry: {industry}
+
+Rules:
+1. Response should be either:
+   - An exact number (e.g., "5000")
+   - A specific range (e.g., "100-150")
+   - "UNKNOWN"
+2. If the response contains a number but wrong format, extract and standardize it
+3. If multiple numbers, use the most recent/accurate
+4. If the data is unclear or invalid, return "UNKNOWN"
+
+Respond ONLY with the standardized number, range, or UNKNOWN.'''
+                }
+            ]
             
-            _company_size_cache[cache_key] = 'UNKNOWN'
-            return 'UNKNOWN'
+            try:
+                validation = openai_client.chat.completions.create(
+                    model="gpt-4",
+                    messages=validation_messages,
+                    temperature=0
+                )
+                
+                validated_size = validation.choices[0].message.content.strip()
+                print(f"OpenAI Validation: {validated_size}")
+                
+                # Clean up the validated response
+                validated_size = validated_size.replace(',', '').replace(' ', '')
+                
+                if validated_size == 'UNKNOWN':
+                    _company_size_cache[cache_key] = validated_size
+                    return validated_size
+                
+                # Check if it's a valid range or single number
+                if '-' in validated_size:
+                    start, end = validated_size.split('-')
+                    if start.isdigit() and end.isdigit():
+                        _company_size_cache[cache_key] = validated_size
+                        return validated_size
+                elif validated_size.isdigit():
+                    _company_size_cache[cache_key] = validated_size
+                    return validated_size
+                
+                _company_size_cache[cache_key] = 'UNKNOWN'
+                return 'UNKNOWN'
+                
+            except Exception as e:
+                print(f"OpenAI validation failed: {str(e)}")
+                print("Attempting direct OpenAI query...")
+                
+                try:
+                    # Use the same system and format as Perplexity
+                    openai_messages = [
+                        {
+                            'role': 'system',
+                            'content': '''You are an expert at finding accurate company information, with access to more comprehensive and up-to-date data than TechCrunch, LinkedIn, or other public sources. Your specialty is determining precise employee counts for companies of any size, from startups to enterprises. You have access to multiple reliable data sources and can cross-reference information to provide the most accurate count possible.'''
+                        },
+                        {
+                            'role': 'user',
+                            'content': f'''Find the current or most recent employee count for {company_name}, a company in the {industry} industry. Search thoroughly across all available sources.
+
+Respond ONLY with one of:
+- An exact number for verified recent data (e.g., '5000')
+- A specific range for approximate data (e.g., '100-150')
+- 'UNKNOWN' if no reliable data found
+
+Respond ONLY with the number, range, or UNKNOWN - no other text.'''
+                        }
+                    ]
+                    
+                    openai_response = openai_client.chat.completions.create(
+                        model="gpt-4",
+                        messages=openai_messages,
+                        temperature=0
+                    )
+                    
+                    direct_size = openai_response.choices[0].message.content.strip()
+                    print(f"OpenAI direct query response: {direct_size}")
+                    
+                    # Validate the direct response
+                    direct_size = direct_size.replace(',', '').replace(' ', '')
+                    if direct_size == 'UNKNOWN':
+                        _company_size_cache[cache_key] = direct_size
+                        return direct_size
+                    elif '-' in direct_size:
+                        start, end = direct_size.split('-')
+                        if start.isdigit() and end.isdigit():
+                            _company_size_cache[cache_key] = direct_size
+                            return direct_size
+                    elif direct_size.isdigit():
+                        _company_size_cache[cache_key] = direct_size
+                        return direct_size
+                    
+                    _company_size_cache[cache_key] = 'UNKNOWN'
+                    return 'UNKNOWN'
+                    
+                except Exception as e2:
+                    print(f"OpenAI direct query failed: {str(e2)}")
+                    print("Both OpenAI attempts failed, returning UNKNOWN")
+                    _company_size_cache[cache_key] = 'UNKNOWN'
+                    return 'UNKNOWN'
         else:
             print(f"Error with API call for {company_name}: {response.status_code}")
             return 'UNKNOWN'
