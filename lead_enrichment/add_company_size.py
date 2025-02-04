@@ -155,7 +155,7 @@ def main():
     
     print(f"Processed {len(df)} companies")
     print("\nFirst few rows with Size:")
-    print(df[["Company Name", "Cleaned Industry", "Size"]].head())
+    print(df[[company_col, industry_col, "Size"]].head())
 
 if __name__ == "__main__":
     main()
