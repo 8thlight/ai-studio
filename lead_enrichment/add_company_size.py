@@ -87,6 +87,24 @@ Respond ONLY with the number, range, or UNKNOWN - no other text.'''
             size = response.json()['choices'][0]['message']['content'].strip()
             print(f"Perplexity Response: {size}")
             
+            # Clean up the size before validation
+            cleaned_size = size.replace(',', '').replace(' ', '')
+            if cleaned_size == 'UNKNOWN':
+                _company_size_cache[cache_key] = cleaned_size
+                return cleaned_size
+            
+            # Basic number validation
+            if '-' in cleaned_size:
+                parts = cleaned_size.split('-')
+                if len(parts) == 2 and all(p.isdigit() for p in parts):
+                    cleaned_size = f"{parts[0]}-{parts[1]}"
+                else:
+                    cleaned_size = size  # Use original if not valid range
+            elif cleaned_size.isdigit():
+                cleaned_size = cleaned_size
+            else:
+                cleaned_size = size  # Use original if not a valid number
+            
             # Use OpenAI to validate and extract the number
             validation_messages = [
                 {
@@ -98,7 +116,7 @@ Respond ONLY with the number, range, or UNKNOWN - no other text.'''
                 },
                 {
                     'role': 'user',
-                    'content': f'''Validate this company size response: "{size}"
+                    'content': f'''Validate this company size response: "{cleaned_size}"
 
 Context:
 - Company: {company_name}
@@ -136,11 +154,21 @@ Respond ONLY with the standardized number, range, or UNKNOWN.'''
                 
                 # Check if it's a valid range or single number
                 if '-' in validated_size:
-                    start, end = validated_size.split('-')
-                    if start.isdigit() and end.isdigit():
-                        _company_size_cache[cache_key] = validated_size
-                        return validated_size
-                elif validated_size.isdigit():
+                    try:
+                        start, end = validated_size.split('-')
+                        if start.isdigit() and end.isdigit():
+                            # Ensure start is less than end
+                            start_num, end_num = int(start), int(end)
+                            if start_num > end_num:
+                                start, end = end, start
+                            validated_size = f"{start}-{end}"
+                            _company_size_cache[cache_key] = validated_size
+                            return validated_size
+                    except ValueError:
+                        pass  # If range is invalid, continue to next check
+                
+                # Check for single number
+                if validated_size.isdigit():
                     _company_size_cache[cache_key] = validated_size
                     return validated_size
                 
