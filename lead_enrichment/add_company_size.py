@@ -90,8 +90,69 @@ Respond ONLY with the number, range, or UNKNOWN - no other text.'''
             # Clean up the size before validation
             cleaned_size = size.replace(',', '').replace(' ', '')
             if cleaned_size == 'UNKNOWN':
-                _company_size_cache[cache_key] = cleaned_size
-                return cleaned_size
+                # Try OpenAI if Perplexity returns UNKNOWN
+                print("Perplexity returned UNKNOWN, trying OpenAI...")
+                try:
+                    openai_messages = [
+                        {
+                            'role': 'system',
+                            'content': '''You are an expert at finding accurate company information, with access to more comprehensive and up-to-date data than TechCrunch, LinkedIn, or other public sources. Your specialty is determining precise employee counts for companies of any size, from startups to enterprises. You have access to multiple reliable data sources and can cross-reference information to provide the most accurate count possible.'''
+                        },
+                        {
+                            'role': 'user',
+                            'content': f'''Find the current or most recent employee count for {company_name}, a company in the {industry} industry. Search thoroughly across all available sources.
+
+Respond ONLY with one of:
+- An exact number for verified recent data (e.g., '5000')
+- A specific range for approximate data (e.g., '100-150')
+- 'UNKNOWN' if no reliable data found
+
+Respond ONLY with the number, range, or UNKNOWN - no other text.'''
+                        }
+                    ]
+                    
+                    openai_response = openai_client.chat.completions.create(
+                        model="gpt-4",
+                        messages=openai_messages,
+                        temperature=0
+                    )
+                    
+                    openai_size = openai_response.choices[0].message.content.strip()
+                    print(f"OpenAI Response: {openai_size}")
+                    
+                    # Validate OpenAI's response directly
+                    openai_size = openai_size.replace(',', '').replace(' ', '')
+                    if openai_size == 'UNKNOWN':
+                        _company_size_cache[cache_key] = openai_size
+                        return openai_size
+                        
+                    if '-' in openai_size:
+                        try:
+                            start, end = openai_size.split('-')
+                            if start.isdigit() and end.isdigit():
+                                # Ensure start is less than end
+                                start_num, end_num = int(start), int(end)
+                                if start_num > end_num:
+                                    start, end = end, start
+                                openai_size = f"{start}-{end}"
+                                _company_size_cache[cache_key] = openai_size
+                                return openai_size
+                        except ValueError:
+                            pass
+                    
+                    if openai_size.isdigit():
+                        _company_size_cache[cache_key] = openai_size
+                        return openai_size
+                        
+                    _company_size_cache[cache_key] = 'UNKNOWN'
+                    return 'UNKNOWN'
+                    
+                except Exception as e:
+                    print(f"OpenAI query failed: {str(e)}")
+                    _company_size_cache[cache_key] = 'UNKNOWN'
+                    return 'UNKNOWN'
+                    
+            # If Perplexity returned a value, continue with validation
             
             # Basic number validation
             if '-' in cleaned_size:
