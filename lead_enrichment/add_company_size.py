@@ -112,7 +112,7 @@ Respond ONLY with the number, range, or UNKNOWN - no other text.'''
                     ]
                     
                     openai_response = openai_client.chat.completions.create(
-                        model="gpt-4-mini",
+                        model="gpt-4",
                         messages=openai_messages,
                         temperature=0
                     )
@@ -198,7 +198,7 @@ Respond ONLY with the standardized number, range, or UNKNOWN.'''
             
             try:
                 validation = openai_client.chat.completions.create(
-                    model="gpt-4-mini",
+                    model="gpt-4o-mini",
                     messages=validation_messages,
                     temperature=0
                 )
@@ -261,7 +261,7 @@ Respond ONLY with the number, range, or UNKNOWN - no other text.'''
                     ]
                     
                     openai_response = openai_client.chat.completions.create(
-                        model="gpt-4-mini",
+                        model="gpt-4o-mini",
                         messages=openai_messages,
                         temperature=0
                     )
