@@ -62,7 +62,7 @@ Respond ONLY with one of:
 - A specific range for approximate data (e.g., '100-150')
 - 'UNKNOWN' if no reliable data found
 
-No other text in response.'''
+Respond ONLY with the number, range, or UNKNOWN - no other text.'''
         }
     ]
     
