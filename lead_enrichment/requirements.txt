@@ -5,6 +5,7 @@ requests>=2.31.0
 
 # AI/ML dependencies
 openai>=1.0.0  # For GPT-4 validation
+litellm>=1.21.0  # For LLM abstraction
 
 # Excel handling
 openpyxl>=3.1.0  # Required for pandas Excel support

@@ -5,6 +5,7 @@ import time
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 from openai import OpenAI
+from litellm import completion
 
 from config import Config
 from excel_processor import ExcelProcessor
