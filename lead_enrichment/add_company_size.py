@@ -7,7 +7,8 @@ import pandas as pd
 from pathlib import Path
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
-from litellm import completion, Cache
+import litellm
+from litellm.caching import Cache
 
 from config import Config
 from excel_processor import ExcelProcessor
@@ -16,9 +17,8 @@ from excel_processor import ExcelProcessor
 load_dotenv()
 config = Config()
 
-# Setup litellm cache
-Cache.cache_path = config.cache_path
-Cache.cache_responses = True
+# Setup litellm cache with disk persistence
+litellm.cache = Cache(type="disk")
 
 # Ensure cache directory exists
 Path(config.cache_path).parent.mkdir(parents=True, exist_ok=True)
@@ -60,13 +60,14 @@ def _query_perplexity(company_name: str, industry: str) -> Optional[str]:
     messages = _create_size_query_messages(company_name, industry)
     
     try:
-        response = completion(
+        response = litellm.completion(
             model=config.perplexity_model,
             messages=messages,
             temperature=config.openai_temperature,  # Use same temperature for consistency
             api_key=api_key,
             api_base=config.perplexity_api_endpoint,
-            provider='perplexity'
+            provider='perplexity',
+            caching=True
         )
         
         size = response.choices[0].message.content.strip()
@@ -81,11 +82,12 @@ def _query_openai(company_name: str, industry: str) -> Optional[str]:
     """Query OpenAI API for company size."""
     try:
         messages = _create_size_query_messages(company_name, industry)
-        response = completion(
+        response = litellm.completion(
             model=config.openai_model,
             messages=messages,
             temperature=config.openai_temperature,
-            api_key=config.openai_api_key
+            api_key=config.openai_api_key,
+            caching=True
         )
         
         size = response.choices[0].message.content.strip()
@@ -151,13 +153,14 @@ def get_company_size(company_name: str, industry: str) -> str:
     print("System prompt and user message prepared for query")
     
     try:
-        response = completion(
+        response = litellm.completion(
             model=config.perplexity_model,
             messages=messages,
             temperature=config.openai_temperature,  # Use same temperature for consistency
             api_key=api_key,
             api_base=config.perplexity_api_endpoint,
-            provider='perplexity'
+            provider='perplexity',
+            caching=True
         )
         
         size = response.choices[0].message.content.strip()
@@ -180,11 +183,12 @@ def get_company_size(company_name: str, industry: str) -> str:
                     }
                 ]
                 
-                openai_response = completion(
+                openai_response = litellm.completion(
                     model=config.openai_model,
                     messages=openai_messages,
                     temperature=config.openai_temperature,
-                    api_key=config.openai_api_key
+                    api_key=config.openai_api_key,
+                    caching=True
                 )
                 
                 openai_size = openai_response.choices[0].message.content.strip()
@@ -244,11 +248,12 @@ def get_company_size(company_name: str, industry: str) -> str:
         ]
         
         try:
-            validation = completion(
+            validation = litellm.completion(
                 model=config.openai_model,
                 messages=validation_messages,
                 temperature=config.openai_temperature,
-                api_key=config.openai_api_key
+                api_key=config.openai_api_key,
+                caching=True
             )
             
             validated_size = validation.choices[0].message.content.strip()
@@ -294,11 +299,12 @@ def get_company_size(company_name: str, industry: str) -> str:
                     }
                 ]
                 
-                openai_response = completion(
+                openai_response = litellm.completion(
                     model=config.openai_model,
                     messages=openai_messages,
                     temperature=config.openai_temperature,
-                    api_key=config.openai_api_key
+                    api_key=config.openai_api_key,
+                    caching=True
                 )
                 
                 direct_size = openai_response.choices[0].message.content.strip()
