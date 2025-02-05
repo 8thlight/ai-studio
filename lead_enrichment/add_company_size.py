@@ -2,6 +2,7 @@
 import os
 import requests
 import time
+import pandas as pd
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 from openai import OpenAI
