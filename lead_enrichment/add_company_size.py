@@ -2,6 +2,7 @@
 import os
 import json
 import time
+import requests
 import pandas as pd
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -64,7 +65,8 @@ def _query_perplexity(company_name: str, industry: str) -> Optional[str]:
             messages=messages,
             temperature=config.openai_temperature,  # Use same temperature for consistency
             api_key=api_key,
-            api_base=config.perplexity_api_endpoint
+            api_base=config.perplexity_api_endpoint,
+            provider='perplexity'
         )
         
         size = response.choices[0].message.content.strip()
@@ -151,175 +153,174 @@ def get_company_size(company_name: str, industry: str) -> str:
     print("System prompt and user message prepared for query")
     
     try:
-        response = requests.post(
-            'https://api.perplexity.ai/chat/completions',
-            headers=headers,
-            json={
-                'model': config.perplexity_model,
-                'messages': messages
-            }
+        response = completion(
+            model=config.perplexity_model,
+            messages=messages,
+            temperature=config.openai_temperature,  # Use same temperature for consistency
+            api_key=api_key,
+            api_base=config.perplexity_api_endpoint,
+            provider='perplexity'
         )
         
-        if response.status_code == 200:
-            size = response.json()['choices'][0]['message']['content'].strip()
-            print(f"Perplexity Response: {size}")
+        size = response.choices[0].message.content.strip()
+        print(f"Perplexity Response: {size}")
             
-            # Clean up the size before validation
-            cleaned_size = size.replace(',', '').replace(' ', '')
-            if cleaned_size == 'UNKNOWN':
-                # Try OpenAI if Perplexity returns UNKNOWN
-                print("Perplexity returned UNKNOWN, trying OpenAI...")
-                try:
-                    openai_messages = [
-                        {
-                            'role': 'system',
-                            'content': config.openai_system_prompt
-                        },
-                        {
-                            'role': 'user',
-                            'content': config.company_size_user_prompt.format(company_name=company_name, industry=industry)
-                        }
-                    ]
-                    
-                    openai_response = completion(
-                        model=config.openai_model,
-                        messages=openai_messages,
-                        temperature=config.openai_temperature,
-                        api_key=config.openai_api_key
-                    )
-                    
-                    openai_size = openai_response.choices[0].message.content.strip()
-                    print(f"OpenAI Response: {openai_size}")
-                    
-                    # Validate OpenAI's response directly
-                    openai_size = openai_size.replace(',', '').replace(' ', '')
-                    if openai_size == 'UNKNOWN':
-                        return openai_size
-                        
-                    if '-' in openai_size:
-                        try:
-                            start, end = openai_size.split('-')
-                            if start.isdigit() and end.isdigit():
-                                # Ensure start is less than end
-                                start_num, end_num = int(start), int(end)
-                                if start_num > end_num:
-                                    start, end = end, start
-                                openai_size = f"{start}-{end}"
-                                return openai_size
-                        except ValueError:
-                            pass
-                    
-                    if openai_size.isdigit():
-                        return openai_size
-                        
-                    return 'UNKNOWN'
-                    
-                except Exception as e:
-                    print(f"OpenAI query failed: {str(e)}")
-                    return 'UNKNOWN'
-                    
-            # If Perplexity returned a value, continue with validation
-            
-            # Basic number validation
-            if '-' in cleaned_size:
-                parts = cleaned_size.split('-')
-                if len(parts) == 2 and all(p.isdigit() for p in parts):
-                    cleaned_size = f"{parts[0]}-{parts[1]}"
-                else:
-                    cleaned_size = size  # Use original if not valid range
-            elif cleaned_size.isdigit():
-                cleaned_size = cleaned_size
-            else:
-                cleaned_size = size  # Use original if not a valid number
-            
-            # Use OpenAI to validate and extract the number
-            validation_messages = [
-                {
-                    'role': 'system',
-                    'content': config.validation_system_prompt
-                },
-                {
-                    'role': 'user',
-                    'content': config.validation_user_prompt.format(size=cleaned_size, company_name=company_name, industry=industry)
-                }
-            ]
-            
+        # Clean up the size before validation
+        cleaned_size = size.replace(',', '').replace(' ', '')
+        if cleaned_size == 'UNKNOWN':
+            # Try OpenAI if Perplexity returns UNKNOWN
+            print("Perplexity returned UNKNOWN, trying OpenAI...")
             try:
-                validation = completion(
+                openai_messages = [
+                    {
+                        'role': 'system',
+                        'content': config.openai_system_prompt
+                    },
+                    {
+                        'role': 'user',
+                        'content': config.company_size_user_prompt.format(company_name=company_name, industry=industry)
+                    }
+                ]
+                
+                openai_response = completion(
                     model=config.openai_model,
-                    messages=validation_messages,
+                    messages=openai_messages,
                     temperature=config.openai_temperature,
                     api_key=config.openai_api_key
                 )
                 
-                validated_size = validation.choices[0].message.content.strip()
-                print(f"OpenAI Validation: {validated_size}")
+                openai_size = openai_response.choices[0].message.content.strip()
+                print(f"OpenAI Response: {openai_size}")
                 
-                # Clean up the validated response
-                validated_size = validated_size.replace(',', '').replace(' ', '')
-                
-                # Check if it's a valid range or single number
-                if '-' in validated_size:
+                # Validate OpenAI's response directly
+                openai_size = openai_size.replace(',', '').replace(' ', '')
+                if openai_size == 'UNKNOWN':
+                    return openai_size
+                    
+                if '-' in openai_size:
                     try:
-                        start, end = validated_size.split('-')
+                        start, end = openai_size.split('-')
                         if start.isdigit() and end.isdigit():
                             # Ensure start is less than end
                             start_num, end_num = int(start), int(end)
                             if start_num > end_num:
                                 start, end = end, start
-                            validated_size = f"{start}-{end}"
-                            return validated_size
+                            openai_size = f"{start}-{end}"
+                            return openai_size
                     except ValueError:
-                        pass  # If range is invalid, continue to next check
+                        pass
                 
-                # Check for single number
-                if validated_size.isdigit():
-                    return validated_size
-                
+                if openai_size.isdigit():
+                    return openai_size
+                    
                 return 'UNKNOWN'
                 
             except Exception as e:
-                print(f"OpenAI validation failed: {str(e)}")
-                print("Attempting direct OpenAI query...")
+                print(f"OpenAI query failed: {str(e)}")
+                return 'UNKNOWN'
                 
+        # If Perplexity returned a value, continue with validation
+        
+        # Basic number validation
+        if '-' in cleaned_size:
+            parts = cleaned_size.split('-')
+            if len(parts) == 2 and all(p.isdigit() for p in parts):
+                cleaned_size = f"{parts[0]}-{parts[1]}"
+            else:
+                cleaned_size = size  # Use original if not valid range
+        elif cleaned_size.isdigit():
+            cleaned_size = cleaned_size
+        else:
+            cleaned_size = size  # Use original if not a valid number
+        
+        # Use OpenAI to validate and extract the number
+        validation_messages = [
+            {
+                'role': 'system',
+                'content': config.validation_system_prompt
+            },
+            {
+                'role': 'user',
+                'content': config.validation_user_prompt.format(size=cleaned_size, company_name=company_name, industry=industry)
+            }
+        ]
+        
+        try:
+            validation = completion(
+                model=config.openai_model,
+                messages=validation_messages,
+                temperature=config.openai_temperature,
+                api_key=config.openai_api_key
+            )
+            
+            validated_size = validation.choices[0].message.content.strip()
+            print(f"OpenAI Validation: {validated_size}")
+            
+            # Clean up the validated response
+            validated_size = validated_size.replace(',', '').replace(' ', '')
+            
+            # Check if it's a valid range or single number
+            if '-' in validated_size:
                 try:
-                    # Use the same system and format as Perplexity
-                    openai_messages = [
-                        {
-                            'role': 'system',
-                            'content': config.openai_system_prompt
-                        },
-                        {
-                            'role': 'user',
-                            'content': config.company_size_user_prompt.format(company_name=company_name, industry=industry)
-                        }
-                    ]
-                    
-                    openai_response = completion(
-                        model=config.openai_model,
-                        messages=openai_messages,
-                        temperature=config.openai_temperature,
-                        api_key=config.openai_api_key
-                    )
-                    
-                    direct_size = openai_response.choices[0].message.content.strip()
-                    print(f"OpenAI direct query response: {direct_size}")
-                    
-                    # Validate the direct response
-                    direct_size = direct_size.replace(',', '').replace(' ', '')
-                    if '-' in direct_size:
-                        start, end = direct_size.split('-')
-                        if start.isdigit() and end.isdigit():
-                            return direct_size
-                    elif direct_size.isdigit():
+                    start, end = validated_size.split('-')
+                    if start.isdigit() and end.isdigit():
+                        # Ensure start is less than end
+                        start_num, end_num = int(start), int(end)
+                        if start_num > end_num:
+                            start, end = end, start
+                        validated_size = f"{start}-{end}"
+                        return validated_size
+                except ValueError:
+                    pass  # If range is invalid, continue to next check
+            
+            # Check for single number
+            if validated_size.isdigit():
+                return validated_size
+            
+            return 'UNKNOWN'
+            
+        except Exception as e:
+            print(f"OpenAI validation failed: {str(e)}")
+            print("Attempting direct OpenAI query...")
+            
+            try:
+                # Use the same system and format as Perplexity
+                openai_messages = [
+                    {
+                        'role': 'system',
+                        'content': config.openai_system_prompt
+                    },
+                    {
+                        'role': 'user',
+                        'content': config.company_size_user_prompt.format(company_name=company_name, industry=industry)
+                    }
+                ]
+                
+                openai_response = completion(
+                    model=config.openai_model,
+                    messages=openai_messages,
+                    temperature=config.openai_temperature,
+                    api_key=config.openai_api_key
+                )
+                
+                direct_size = openai_response.choices[0].message.content.strip()
+                print(f"OpenAI direct query response: {direct_size}")
+                
+                # Validate the direct response
+                direct_size = direct_size.replace(',', '').replace(' ', '')
+                if '-' in direct_size:
+                    start, end = direct_size.split('-')
+                    if start.isdigit() and end.isdigit():
                         return direct_size
-                    
-                    return 'UNKNOWN'
-                    
-                except Exception as e2:
-                    print(f"OpenAI direct query failed: {str(e2)}")
-                    print("Both OpenAI attempts failed, returning UNKNOWN")
-                    return 'UNKNOWN'
+                elif direct_size.isdigit():
+                    return direct_size
+                
+                return 'UNKNOWN'
+                
+            except Exception as e2:
+                print(f"OpenAI direct query failed: {str(e2)}")
+                print("Both OpenAI attempts failed, returning UNKNOWN")
+                return 'UNKNOWN'
         else:
             print(f"Error with API call for {company_name}: {response.status_code}")
             return 'UNKNOWN'
