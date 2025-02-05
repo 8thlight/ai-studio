@@ -23,6 +23,16 @@ class Config:
     openai_temperature: float = 0.2
     openai_system_prompt: str = perplexity_system_prompt  # Use same prompt for consistency
     
+    # Common LLM prompts
+    company_size_user_prompt: str = '''Find the current or most recent employee count for {company_name}, a company in the {industry} industry. Search thoroughly across all available sources.
+
+Respond ONLY with one of:
+- An exact number for verified recent data (e.g., '5000')
+- A specific range for approximate data (e.g., '100-150')
+- 'UNKNOWN' if no reliable data found
+
+Respond ONLY with the number, range, or UNKNOWN - no other text.'''
+    
     # Common settings
     rate_limit_delay: float = 0.5
     

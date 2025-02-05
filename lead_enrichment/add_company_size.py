@@ -15,8 +15,6 @@ load_dotenv()
 config = Config()
 openai_client = OpenAI(api_key=config.openai_api_key)
 
-# Cache to store company size results
-_company_size_cache = {}
 
 def _validate_size_format(size: str) -> Optional[str]:
     """Validate and standardize size format."""
@@ -107,14 +105,7 @@ def _create_size_query_messages(company_name: str, industry: str) -> list[Dict[s
         },
         {
             'role': 'user',
-            'content': f'''Find the current or most recent employee count for {company_name}, a company in the {industry} industry. Search thoroughly across all available sources.
-
-Respond ONLY with one of:
-- An exact number for verified recent data (e.g., '5000')
-- A specific range for approximate data (e.g., '100-150')
-- 'UNKNOWN' if no reliable data found
-
-Respond ONLY with the number, range, or UNKNOWN - no other text.'''
+            'content': config.company_size_user_prompt.format(company_name=company_name, industry=industry)
         }
     ]
 
@@ -135,19 +126,10 @@ def get_company_size(company_name: str, industry: str) -> str:
     
     if not company_name or not industry:
         return "UNKNOWN"
-    
-    # Create cache key from company name and industry
-    cache_key = (company_name.lower(), industry.lower())
-    
-    # Check cache first
-    if cache_key in _company_size_cache:
-        cached_result = _company_size_cache[cache_key]
-        print(f"Cache hit for: {company_name} ({industry}) -> {cached_result}")
-        return cached_result
 
     print(f"Cache miss for: {company_name} ({industry})")
     
-    api_key = os.getenv('PERPLEXITY_API_KEY')
+    api_key = config.perplexity_api_key
     if not api_key:
         raise ValueError("PERPLEXITY_API_KEY environment variable is required")
 
@@ -163,14 +145,7 @@ def get_company_size(company_name: str, industry: str) -> str:
         },
         {
             'role': 'user',
-            'content': f'''Find the current or most recent employee count for {company_name}, a company in the {industry} industry. Search thoroughly across all available sources.
-
-Respond ONLY with one of:
-- An exact number for verified recent data (e.g., '5000')
-- A specific range for approximate data (e.g., '100-150')
-- 'UNKNOWN' if no reliable data found
-
-Respond ONLY with the number, range, or UNKNOWN - no other text.'''
+            'content': config.company_size_user_prompt.format(company_name=company_name, industry=industry)
         }
     ]
     
@@ -200,18 +175,11 @@ Respond ONLY with the number, range, or UNKNOWN - no other text.'''
                     openai_messages = [
                         {
                             'role': 'system',
-                            'content': '''You are an expert at finding accurate company information, with access to more comprehensive and up-to-date data than TechCrunch, LinkedIn, or other public sources. Your specialty is determining precise employee counts for companies of any size, from startups to enterprises. You have access to multiple reliable data sources and can cross-reference information to provide the most accurate count possible.'''
+                            'content': config.openai_system_prompt
                         },
                         {
                             'role': 'user',
-                            'content': f'''Find the current or most recent employee count for {company_name}, a company in the {industry} industry. Search thoroughly across all available sources.
-
-Respond ONLY with one of:
-- An exact number for verified recent data (e.g., '5000')
-- A specific range for approximate data (e.g., '100-150')
-- 'UNKNOWN' if no reliable data found
-
-Respond ONLY with the number, range, or UNKNOWN - no other text.'''
+                            'content': config.company_size_user_prompt.format(company_name=company_name, industry=industry)
                         }
                     ]
                     
@@ -227,7 +195,6 @@ Respond ONLY with the number, range, or UNKNOWN - no other text.'''
                     # Validate OpenAI's response directly
                     openai_size = openai_size.replace(',', '').replace(' ', '')
                     if openai_size == 'UNKNOWN':
-                        _company_size_cache[cache_key] = openai_size
                         return openai_size
                         
                     if '-' in openai_size:
@@ -239,21 +206,17 @@ Respond ONLY with the number, range, or UNKNOWN - no other text.'''
                                 if start_num > end_num:
                                     start, end = end, start
                                 openai_size = f"{start}-{end}"
-                                _company_size_cache[cache_key] = openai_size
                                 return openai_size
                         except ValueError:
                             pass
                     
                     if openai_size.isdigit():
-                        _company_size_cache[cache_key] = openai_size
                         return openai_size
                         
-                    _company_size_cache[cache_key] = 'UNKNOWN'
                     return 'UNKNOWN'
                     
                 except Exception as e:
                     print(f"OpenAI query failed: {str(e)}")
-                    _company_size_cache[cache_key] = 'UNKNOWN'
                     return 'UNKNOWN'
                     
             # If Perplexity returned a value, continue with validation
@@ -313,10 +276,6 @@ Respond ONLY with the standardized number, range, or UNKNOWN.'''
                 # Clean up the validated response
                 validated_size = validated_size.replace(',', '').replace(' ', '')
                 
-                if validated_size == 'UNKNOWN':
-                    _company_size_cache[cache_key] = validated_size
-                    return validated_size
-                
                 # Check if it's a valid range or single number
                 if '-' in validated_size:
                     try:
@@ -327,17 +286,14 @@ Respond ONLY with the standardized number, range, or UNKNOWN.'''
                             if start_num > end_num:
                                 start, end = end, start
                             validated_size = f"{start}-{end}"
-                            _company_size_cache[cache_key] = validated_size
                             return validated_size
                     except ValueError:
                         pass  # If range is invalid, continue to next check
                 
                 # Check for single number
                 if validated_size.isdigit():
-                    _company_size_cache[cache_key] = validated_size
                     return validated_size
                 
-                _company_size_cache[cache_key] = 'UNKNOWN'
                 return 'UNKNOWN'
                 
             except Exception as e:
@@ -349,18 +305,11 @@ Respond ONLY with the standardized number, range, or UNKNOWN.'''
                     openai_messages = [
                         {
                             'role': 'system',
-                            'content': '''You are an expert at finding accurate company information, with access to more comprehensive and up-to-date data than TechCrunch, LinkedIn, or other public sources. Your specialty is determining precise employee counts for companies of any size, from startups to enterprises. You have access to multiple reliable data sources and can cross-reference information to provide the most accurate count possible.'''
+                            'content': config.openai_system_prompt
                         },
                         {
                             'role': 'user',
-                            'content': f'''Find the current or most recent employee count for {company_name}, a company in the {industry} industry. Search thoroughly across all available sources.
-
-Respond ONLY with one of:
-- An exact number for verified recent data (e.g., '5000')
-- A specific range for approximate data (e.g., '100-150')
-- 'UNKNOWN' if no reliable data found
-
-Respond ONLY with the number, range, or UNKNOWN - no other text.'''
+                            'content': config.company_size_user_prompt.format(company_name=company_name, industry=industry)
                         }
                     ]
                     
@@ -375,25 +324,18 @@ Respond ONLY with the number, range, or UNKNOWN - no other text.'''
                     
                     # Validate the direct response
                     direct_size = direct_size.replace(',', '').replace(' ', '')
-                    if direct_size == 'UNKNOWN':
-                        _company_size_cache[cache_key] = direct_size
-                        return direct_size
-                    elif '-' in direct_size:
+                    if '-' in direct_size:
                         start, end = direct_size.split('-')
                         if start.isdigit() and end.isdigit():
-                            _company_size_cache[cache_key] = direct_size
                             return direct_size
                     elif direct_size.isdigit():
-                        _company_size_cache[cache_key] = direct_size
                         return direct_size
                     
-                    _company_size_cache[cache_key] = 'UNKNOWN'
                     return 'UNKNOWN'
                     
                 except Exception as e2:
                     print(f"OpenAI direct query failed: {str(e2)}")
                     print("Both OpenAI attempts failed, returning UNKNOWN")
-                    _company_size_cache[cache_key] = 'UNKNOWN'
                     return 'UNKNOWN'
         else:
             print(f"Error with API call for {company_name}: {response.status_code}")
