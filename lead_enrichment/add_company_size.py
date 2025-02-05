@@ -1,18 +1,121 @@
-import pandas as pd
+"""Script to enrich company data with employee size information using AI APIs."""
 import os
 import requests
 import time
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# Load environment variables from .env file
-load_dotenv()
+from config import Config
+from excel_processor import ExcelProcessor
 
-# Initialize OpenAI client
+# Load environment variables and initialize clients
+load_dotenv()
+config = Config()
 openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 # Cache to store company size results
 _company_size_cache = {}
+
+def _validate_size_format(size: str) -> Optional[str]:
+    """Validate and standardize size format."""
+    # Clean the size string
+    size = size.replace(',', '').replace(' ', '')
+    
+    # Handle UNKNOWN case
+    if size.upper() == 'UNKNOWN':
+        return 'UNKNOWN'
+        
+    # Handle range format
+    if '-' in size:
+        try:
+            start, end = size.split('-')
+            if start.isdigit() and end.isdigit():
+                start_num, end_num = int(start), int(end)
+                if start_num > end_num:
+                    start, end = end, start
+                return f"{start}-{end}"
+        except ValueError:
+            return None
+            
+    # Handle single number
+    if size.isdigit():
+        return size
+        
+    return None
+
+def _query_perplexity(company_name: str, industry: str) -> Optional[str]:
+    """Query Perplexity API for company size."""
+    api_key = os.getenv('PERPLEXITY_API_KEY')
+    if not api_key:
+        raise ValueError("PERPLEXITY_API_KEY environment variable is required")
+
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json'
+    }
+    
+    messages = _create_size_query_messages(company_name, industry)
+    
+    try:
+        response = requests.post(
+            'https://api.perplexity.ai/chat/completions',
+            headers=headers,
+            json={
+                'model': config.perplexity_model,
+                'messages': messages
+            }
+        )
+        
+        if response.status_code == 200:
+            size = response.json()['choices'][0]['message']['content'].strip()
+            print(f"Perplexity Response: {size}")
+            return _validate_size_format(size)
+            
+        print(f"Error with API call: {response.status_code}")
+        return None
+        
+    except Exception as e:
+        print(f"Exception when querying Perplexity: {str(e)}")
+        return None
+
+def _query_openai(company_name: str, industry: str) -> Optional[str]:
+    """Query OpenAI API for company size."""
+    try:
+        messages = _create_size_query_messages(company_name, industry)
+        response = openai_client.chat.completions.create(
+            model=config.openai_model,
+            messages=messages,
+            temperature=config.openai_temperature
+        )
+        
+        size = response.choices[0].message.content.strip()
+        print(f"OpenAI Response: {size}")
+        return _validate_size_format(size)
+        
+    except Exception as e:
+        print(f"OpenAI query failed: {str(e)}")
+        return None
+
+def _create_size_query_messages(company_name: str, industry: str) -> list[Dict[str, str]]:
+    """Create message list for API queries."""
+    return [
+        {
+            'role': 'system',
+            'content': '''You are an expert at finding accurate company information, with access to more comprehensive and up-to-date data than TechCrunch, LinkedIn, or other public sources. Your specialty is determining precise employee counts for companies of any size, from startups to enterprises. You have access to multiple reliable data sources and can cross-reference information to provide the most accurate count possible.'''
+        },
+        {
+            'role': 'user',
+            'content': f'''Find the current or most recent employee count for {company_name}, a company in the {industry} industry. Search thoroughly across all available sources.
+
+Respond ONLY with one of:
+- An exact number for verified recent data (e.g., '5000')
+- A specific range for approximate data (e.g., '100-150')
+- 'UNKNOWN' if no reliable data found
+
+Respond ONLY with the number, range, or UNKNOWN - no other text.'''
+        }
+    ]
 
 def get_company_size(company_name: str, industry: str) -> str:
     """
@@ -55,7 +158,7 @@ def get_company_size(company_name: str, industry: str) -> str:
     messages = [
         {
             'role': 'system',
-            'content': '''You are an expert at finding accurate company information, with access to more comprehensive and up-to-date data than TechCrunch, LinkedIn, or other public sources. Your specialty is determining precise employee counts for companies of any size, from startups to enterprises. You have access to multiple reliable data sources and can cross-reference information to provide the most accurate count possible.'''
+            'content': config.perplexity_system_prompt
         },
         {
             'role': 'user',
@@ -300,66 +403,21 @@ Respond ONLY with the number, range, or UNKNOWN - no other text.'''
         return 'UNKNOWN'
     
     # Add a small delay to avoid hitting rate limits
-    time.sleep(0.5)
+    time.sleep(config.rate_limit_delay)
+
+
 
 def main():
-    # Read the Excel file from the data directory
-    excel_path = "data/hubspot-crm-exports-ai-nurture-test-updated.xlsx"
-    df = pd.read_excel(excel_path, sheet_name="Original Data")
+    """Main entry point for the script."""
+    # Initialize Excel processor
+    processor = ExcelProcessor(config)
     
-    # Debug: Print column names
-    print("\nAvailable columns in Excel:")
-    for col in df.columns:
-        print(f"  - {col}")
+    # Load and process data
+    processor.load_and_validate_data()
+    processor.process_companies(get_company_size)
     
-    # Get the correct column names
-    company_col = "Company name"
-    industry_col = "Cleaned Industry"
-    
-    if company_col not in df.columns or industry_col not in df.columns:
-        raise ValueError(f"Could not find required columns. Need '{company_col}' and '{industry_col}' columns.")
-    
-    print(f"\nUsing columns:\n  Company: {company_col}\n  Industry: {industry_col}")
-    
-    # Add Size column if it doesn't exist
-    if "Size" not in df.columns:
-        print("Adding Size column...")
-        df["Size"] = ""
-    
-    # Process each company and save after each one
-    total_companies = len(df)
-    processed_count = 0
-    skipped_count = 0
-    invalid_count = 0
-    
-    for idx, row in df.iterrows():
-        # Skip if we already have data for this company
-        current_size = str(row.get("Size", "")).strip()
-        if current_size and current_size.upper() != "NAN":
-            print(f"\nSkipping company {idx + 1}/{total_companies} - already has size: {current_size}")
-            skipped_count += 1
-            continue
-        
-        # Skip if company name or industry is invalid
-        if pd.isna(row[company_col]) or pd.isna(row[industry_col]) or \
-           not str(row[company_col]).strip() or not str(row[industry_col]).strip():
-            print(f"\nSkipping company {idx + 1}/{total_companies} - invalid data")
-            invalid_count += 1
-            continue
-            
-        print(f"\nProcessing company {idx + 1}/{total_companies}")
-        df.at[idx, "Size"] = get_company_size(row[company_col], row[industry_col])
-        processed_count += 1
-        
-        # Save after each company
-        df.to_excel(excel_path, sheet_name="Original Data", index=False)
-        print(f"Saved progress after company {idx + 1}")
-    
-    print(f"\nCompleted: {processed_count} processed, {skipped_count} skipped (already had data), {invalid_count} skipped (invalid data)")
-    
-    print(f"Processed {len(df)} companies")
-    print("\nFirst few rows with Size:")
-    print(df[[company_col, industry_col, "Size"]].head())
+    # Print summary
+    processor.print_summary()
 
 if __name__ == "__main__":
     main()
