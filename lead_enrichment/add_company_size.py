@@ -1,20 +1,26 @@
 """Script to enrich company data with employee size information using AI APIs."""
 import os
-import requests
+import json
 import time
 import pandas as pd
+from pathlib import Path
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
-from openai import OpenAI
-from litellm import completion
+from litellm import completion, Cache
 
 from config import Config
 from excel_processor import ExcelProcessor
 
-# Load environment variables and initialize clients
+# Load environment variables and initialize config
 load_dotenv()
 config = Config()
-openai_client = OpenAI(api_key=config.openai_api_key)
+
+# Setup litellm cache
+Cache.cache_path = config.cache_path
+Cache.cache_responses = True
+
+# Ensure cache directory exists
+Path(config.cache_path).parent.mkdir(parents=True, exist_ok=True)
 
 
 def _validate_size_format(size: str) -> Optional[str]:
@@ -49,31 +55,21 @@ def _query_perplexity(company_name: str, industry: str) -> Optional[str]:
     api_key = config.perplexity_api_key
     if not api_key:
         raise ValueError("PERPLEXITY_API_KEY environment variable is required")
-
-    headers = {
-        'Authorization': f'Bearer {api_key}',
-        'Content-Type': 'application/json'
-    }
     
     messages = _create_size_query_messages(company_name, industry)
     
     try:
-        response = requests.post(
-            config.perplexity_api_endpoint,
-            headers=headers,
-            json={
-                'model': config.perplexity_model,
-                'messages': messages
-            }
+        response = completion(
+            model=config.perplexity_model,
+            messages=messages,
+            temperature=config.openai_temperature,  # Use same temperature for consistency
+            api_key=api_key,
+            api_base=config.perplexity_api_endpoint
         )
         
-        if response.status_code == 200:
-            size = response.json()['choices'][0]['message']['content'].strip()
-            print(f"Perplexity Response: {size}")
-            return _validate_size_format(size)
-            
-        print(f"Error with API call: {response.status_code}")
-        return None
+        size = response.choices[0].message.content.strip()
+        print(f"Perplexity Response: {size}")
+        return _validate_size_format(size)
         
     except Exception as e:
         print(f"Exception when querying Perplexity: {str(e)}")
@@ -83,10 +79,11 @@ def _query_openai(company_name: str, industry: str) -> Optional[str]:
     """Query OpenAI API for company size."""
     try:
         messages = _create_size_query_messages(company_name, industry)
-        response = openai_client.chat.completions.create(
+        response = completion(
             model=config.openai_model,
             messages=messages,
-            temperature=config.openai_temperature
+            temperature=config.openai_temperature,
+            api_key=config.openai_api_key
         )
         
         size = response.choices[0].message.content.strip()
@@ -184,10 +181,11 @@ def get_company_size(company_name: str, industry: str) -> str:
                         }
                     ]
                     
-                    openai_response = openai_client.chat.completions.create(
+                    openai_response = completion(
                         model=config.openai_model,
                         messages=openai_messages,
-                        temperature=config.openai_temperature
+                        temperature=config.openai_temperature,
+                        api_key=config.openai_api_key
                     )
                     
                     openai_size = openai_response.choices[0].message.content.strip()
@@ -247,10 +245,11 @@ def get_company_size(company_name: str, industry: str) -> str:
             ]
             
             try:
-                validation = openai_client.chat.completions.create(
+                validation = completion(
                     model=config.openai_model,
                     messages=validation_messages,
-                    temperature=config.openai_temperature
+                    temperature=config.openai_temperature,
+                    api_key=config.openai_api_key
                 )
                 
                 validated_size = validation.choices[0].message.content.strip()
@@ -296,10 +295,11 @@ def get_company_size(company_name: str, industry: str) -> str:
                         }
                     ]
                     
-                    openai_response = openai_client.chat.completions.create(
+                    openai_response = completion(
                         model=config.openai_model,
                         messages=openai_messages,
-                        temperature=config.openai_temperature
+                        temperature=config.openai_temperature,
+                        api_key=config.openai_api_key
                     )
                     
                     direct_size = openai_response.choices[0].message.content.strip()

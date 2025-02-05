@@ -18,7 +18,8 @@ class Config:
     perplexity_model: str = "sonar"
     perplexity_system_prompt: str = '''You are an expert at finding accurate company information, with access to more comprehensive and up-to-date data than TechCrunch, LinkedIn, or other public sources. Your specialty is determining precise employee counts for companies of any size, from startups to enterprises. You have access to multiple reliable data sources and can cross-reference information to provide the most accurate count possible.'''
     
-    # OpenAI settings
+    # LLM settings
+    cache_path: str = "cache/llm_responses.json"  # Path to store litellm cache
     openai_model: str = "gpt-4o-mini"
     openai_temperature: float = 0.2
     openai_system_prompt: str = perplexity_system_prompt  # Use same prompt for consistency
