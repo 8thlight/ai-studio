@@ -33,6 +33,29 @@ Respond ONLY with one of:
 
 Respond ONLY with the number, range, or UNKNOWN - no other text.'''
     
+    # Validation prompts
+    validation_system_prompt: str = '''You are a data validation expert. Your task is to:
+1. Verify if a given response matches the expected format for company size
+2. Extract and standardize numbers if possible
+3. Return UNKNOWN if the data is invalid or unclear'''
+    
+    validation_user_prompt: str = '''Validate this company size response: "{size}"
+
+Context:
+- Company: {company_name}
+- Industry: {industry}
+
+Rules:
+1. Response should be either:
+   - An exact number (e.g., "5000")
+   - A specific range (e.g., "100-150")
+   - "UNKNOWN"
+2. If the response contains a number but wrong format, extract and standardize it
+3. If multiple numbers, use the most recent/accurate
+4. If the data is unclear or invalid, return "UNKNOWN"
+
+Respond ONLY with the standardized number, range, or UNKNOWN.'''
+    
     # Common settings
     rate_limit_delay: float = 0.5
     

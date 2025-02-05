@@ -157,7 +157,7 @@ def get_company_size(company_name: str, industry: str) -> str:
             'https://api.perplexity.ai/chat/completions',
             headers=headers,
             json={
-                'model': 'sonar',
+                'model': config.perplexity_model,
                 'messages': messages
             }
         )
@@ -184,9 +184,9 @@ def get_company_size(company_name: str, industry: str) -> str:
                     ]
                     
                     openai_response = openai_client.chat.completions.create(
-                        model="gpt-4o-mini",
+                        model=config.openai_model,
                         messages=openai_messages,
-                        temperature=0.2
+                        temperature=config.openai_temperature
                     )
                     
                     openai_size = openai_response.choices[0].message.content.strip()
@@ -237,37 +237,19 @@ def get_company_size(company_name: str, industry: str) -> str:
             validation_messages = [
                 {
                     'role': 'system',
-                    'content': '''You are a data validation expert. Your task is to:
-1. Verify if a given response matches the expected format for company size
-2. Extract and standardize numbers if possible
-3. Return UNKNOWN if the data is invalid or unclear'''
+                    'content': config.validation_system_prompt
                 },
                 {
                     'role': 'user',
-                    'content': f'''Validate this company size response: "{cleaned_size}"
-
-Context:
-- Company: {company_name}
-- Industry: {industry}
-
-Rules:
-1. Response should be either:
-   - An exact number (e.g., "5000")
-   - A specific range (e.g., "100-150")
-   - "UNKNOWN"
-2. If the response contains a number but wrong format, extract and standardize it
-3. If multiple numbers, use the most recent/accurate
-4. If the data is unclear or invalid, return "UNKNOWN"
-
-Respond ONLY with the standardized number, range, or UNKNOWN.'''
+                    'content': config.validation_user_prompt.format(size=cleaned_size, company_name=company_name, industry=industry)
                 }
             ]
             
             try:
                 validation = openai_client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model=config.openai_model,
                     messages=validation_messages,
-                    temperature=0.2
+                    temperature=config.openai_temperature
                 )
                 
                 validated_size = validation.choices[0].message.content.strip()
@@ -314,9 +296,9 @@ Respond ONLY with the standardized number, range, or UNKNOWN.'''
                     ]
                     
                     openai_response = openai_client.chat.completions.create(
-                        model="gpt-4o-mini",
+                        model=config.openai_model,
                         messages=openai_messages,
-                        temperature=0.2
+                        temperature=config.openai_temperature
                     )
                     
                     direct_size = openai_response.choices[0].message.content.strip()
