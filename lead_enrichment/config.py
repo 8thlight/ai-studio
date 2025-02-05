@@ -35,10 +35,14 @@ Respond ONLY with one of:
 Respond ONLY with the number, range, or UNKNOWN - no other text.'''
     
     # Validation prompts
-    validation_system_prompt: str = '''You are a data validation expert. Your task is to:
-1. Verify if a given response matches the expected format for company size
-2. Extract and standardize numbers if possible
-3. Return UNKNOWN if the data is invalid or unclear'''
+    validation_system_prompt: str = '''You are a data validation expert who extracts employee counts from text. Your task is to:
+1. Find any numbers that represent employee counts, even if they are embedded in text (e.g. "More than 458,000" -> "458000")
+2. If multiple numbers are found, use the most specific/recent one
+3. Handle ranges (e.g. "100-150") and keep them as is
+4. Remove any commas from numbers
+5. Return UNKNOWN only if no valid numbers can be found
+
+Respond ONLY with the cleaned number/range or UNKNOWN.'''
     
     validation_user_prompt: str = '''Validate this company size response: "{size}"
 
@@ -58,7 +62,7 @@ Rules:
 Respond ONLY with the standardized number, range, or UNKNOWN.'''
     
     # Common settings
-    rate_limit_delay: float = 0.5
+    rate_limit_delay: float = 0.05
     
     @property
     def perplexity_api_key(self) -> Optional[str]:
