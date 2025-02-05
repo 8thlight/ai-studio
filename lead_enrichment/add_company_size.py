@@ -13,7 +13,7 @@ from excel_processor import ExcelProcessor
 # Load environment variables and initialize clients
 load_dotenv()
 config = Config()
-openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+openai_client = OpenAI(api_key=config.openai_api_key)
 
 # Cache to store company size results
 _company_size_cache = {}
@@ -47,7 +47,7 @@ def _validate_size_format(size: str) -> Optional[str]:
 
 def _query_perplexity(company_name: str, industry: str) -> Optional[str]:
     """Query Perplexity API for company size."""
-    api_key = os.getenv('PERPLEXITY_API_KEY')
+    api_key = config.perplexity_api_key
     if not api_key:
         raise ValueError("PERPLEXITY_API_KEY environment variable is required")
 
@@ -60,7 +60,7 @@ def _query_perplexity(company_name: str, industry: str) -> Optional[str]:
     
     try:
         response = requests.post(
-            'https://api.perplexity.ai/chat/completions',
+            config.perplexity_api_endpoint,
             headers=headers,
             json={
                 'model': config.perplexity_model,
@@ -103,7 +103,7 @@ def _create_size_query_messages(company_name: str, industry: str) -> list[Dict[s
     return [
         {
             'role': 'system',
-            'content': '''You are an expert at finding accurate company information, with access to more comprehensive and up-to-date data than TechCrunch, LinkedIn, or other public sources. Your specialty is determining precise employee counts for companies of any size, from startups to enterprises. You have access to multiple reliable data sources and can cross-reference information to provide the most accurate count possible.'''
+            'content': config.openai_system_prompt
         },
         {
             'role': 'user',
