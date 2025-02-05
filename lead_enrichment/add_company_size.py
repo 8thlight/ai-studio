@@ -127,8 +127,6 @@ def get_company_size(company_name: str, industry: str) -> str:
     if not company_name or not industry:
         return "UNKNOWN"
 
-    print(f"Cache miss for: {company_name} ({industry})")
-    
     api_key = config.perplexity_api_key
     if not api_key:
         raise ValueError("PERPLEXITY_API_KEY environment variable is required")
