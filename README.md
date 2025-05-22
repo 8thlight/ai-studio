@@ -1,6 +1,8 @@
 # AI Studio
 
-A collection of AI-powered tools for sales and marketing teams focused on lead generation, enrichment, and research.
+A curated collection of AI-powered tools for lead generation, enrichment, and research.
+
+**Bonus**: At the end, you’ll also find a showcase of personal projects from individual studio members.
 
 ## Projects
 
@@ -53,12 +55,6 @@ Check out these additional AI projects for more examples and inspiration:
 
 ### By Ismail
 - [AI Studio K8s](https://github.com/8thlight/ai-studio-k8s) - Kubernetes deployment configuration for AI Studio (private repository - contact Ismail for access)
-
-### Other Resources
-
-- [AutoGen](https://github.com/microsoft/autogen) - A framework for building LLM applications with multiple agents
-- [LangChain](https://github.com/langchain-ai/langchain) - A framework for developing applications powered by language models
-- [LlamaIndex](https://github.com/run-llama/llama_index) - A data framework for LLM applications to ingest, structure, and access private or domain-specific data
 
 ## License
 
