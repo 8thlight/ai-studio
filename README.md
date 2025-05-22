@@ -46,11 +46,13 @@ Each project has its own setup instructions and requirements. Please refer to th
 
 Check out these additional AI projects for more examples and inspiration:
 
-### By the Same Author
+### By Travis
 
 - [AI Operator](https://github.com/T-rav/ai-operator) - A real-time voice conversation system with GPT-4o that features low-latency responses and natural interruption handling
 - [Insight Mesh](https://github.com/T-rav/insight-mesh) - A complete RAG (Retrieval Augmented Generation) stack that helps organizations unlock the value of their internal knowledge
-- [AI Studio K8s](https://github.com/8thlight/ai-studio-k8s) - Kubernetes deployment configuration for AI Studio (private repository - contact Travis for access)
+
+### By Ismail
+- [AI Studio K8s](https://github.com/8thlight/ai-studio-k8s) - Kubernetes deployment configuration for AI Studio (private repository - contact Ismail for access)
 
 ### Other Resources
 
